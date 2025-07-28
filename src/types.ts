@@ -1,20 +1,3 @@
-// Cloudflare Worker Environment
-export interface Env {
-    // Vars
-    BRAND_TEXT: string;
-    LOGO_URL: string;
-    OVERLAY_IMAGE_URL: string;
-    
-    // Secrets
-    GEMINI_API_KEY: string;
-    NEWSDATA_API_KEY: string;
-    CLOUDINARY_CLOUD_NAME: string;
-    CLOUDINARY_API_KEY: string;
-    CLOUDINARY_UPLOAD_PRESET: string;
-    MAKE_WEBHOOK_URL: string;
-    MAKE_WEBHOOK_AUTH_TOKEN: string;
-    LOG_WEBHOOK_URL: string; // For sending logs
-}
 
 // NewsData.io API
 export interface NewsArticle {

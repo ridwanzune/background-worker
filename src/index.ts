@@ -1,10 +1,28 @@
+
 import * as React from 'react';
 import { GoogleGenAI } from '@google/genai';
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
-import { Env, NewsArticle, NewsCategory, GeminiAnalysisResult, HeadlinePart, NewsDataResponse } from './types';
+import { NewsArticle, NewsCategory, GeminiAnalysisResult, HeadlinePart, NewsDataResponse } from './types';
 
-// Dummy definitions for Cloudflare Worker types to satisfy TypeScript compiler.
+// --- START: Hardcoded Configuration ---
+// Secrets / API Keys
+const GEMINI_API_KEY = 'AIzaSyAp0A5k9v_03To0RNieHAhAPGEc_1gEuz4';
+const NEWSDATA_API_KEY = 'pub_1058e1309a4d4112a59c6f7847c1a98a';
+const CLOUDINARY_CLOUD_NAME = 'dukaroz3u';
+const CLOUDINARY_API_KEY = '151158368369834';
+const CLOUDINARY_UPLOAD_PRESET = 'Autoupload';
+const MAKE_WEBHOOK_URL = 'https://hook.eu2.make.com/mvsz33n18i6dl18xynls7ie9gnoxzghl';
+const MAKE_WEBHOOK_AUTH_TOKEN = 'xR@7!pZ2#qLd$Vm8^tYe&WgC*oUeXsKv';
+const LOG_WEBHOOK_URL = 'https://hook.eu2.make.com/0ui64t2di3wvvg00fih0d32qp9i9jgme';
+
+// Constants
+const LOGO_URL = 'https://res.cloudinary.com/dy80ftu9k/image/upload/v1753507647/scs_cqidjz.png';
+const BRAND_TEXT = 'Dhaka Dispatch';
+const OVERLAY_IMAGE_URL = 'https://res.cloudinary.com/dy80ftu9k/image/upload/v1753644798/Untitled-1_hxkjvt.png';
+// --- END: Hardcoded Configuration ---
+
+// Dummy definitions for Cloudflare Worker types
 interface ScheduledController {}
 interface ExecutionContext {
     waitUntil(promise: Promise<any>): void;
@@ -16,7 +34,7 @@ type LogLevel = 'INFO' | 'ERROR' | 'SUCCESS' | 'WARNING';
  * Sends a log message to the console and to a specified webhook URL.
  * The webhook call is "fire-and-forget" and does not block execution.
  */
-function log(env: Env, level: LogLevel, message: string, data: object = {}) {
+function log(level: LogLevel, message: string, data: object = {}) {
     const timestamp = new Date().toISOString();
     const logMessage = `[${level}] ${message}`;
 
@@ -26,7 +44,7 @@ function log(env: Env, level: LogLevel, message: string, data: object = {}) {
         console.log(timestamp, logMessage, data);
     }
 
-    if (!env.LOG_WEBHOOK_URL) return;
+    if (!LOG_WEBHOOK_URL) return;
 
     const payload = {
         timestamp,
@@ -36,7 +54,7 @@ function log(env: Env, level: LogLevel, message: string, data: object = {}) {
     };
 
     // Non-blocking call to the webhook
-    const promise = fetch(env.LOG_WEBHOOK_URL, {
+    const promise = fetch(LOG_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -53,80 +71,80 @@ const NEWS_CATEGORIES: NewsCategory[] = [
 ];
 
 export default {
-    async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-        log(env, 'INFO', "Cron trigger received. Starting batch process...");
-        ctx.waitUntil(processNewsBatch(env));
+    async scheduled(_controller: ScheduledController, _env: any, ctx: ExecutionContext): Promise<void> {
+        log('INFO', "Cron trigger received. Starting batch process...");
+        ctx.waitUntil(processNewsBatch());
     },
-    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-        log(env, 'INFO', "Manual trigger received. Starting batch process...");
-        ctx.waitUntil(processNewsBatch(env));
+    async fetch(_request: Request, _env: any, ctx: ExecutionContext): Promise<Response> {
+        log('INFO', "Manual trigger received. Starting batch process...");
+        ctx.waitUntil(processNewsBatch());
         return new Response("News processing batch triggered successfully.", { status: 202 });
     }
 };
 
-async function processNewsBatch(env: Env): Promise<void> {
-    log(env, 'INFO', "--- Starting New Batch Process ---");
+async function processNewsBatch(): Promise<void> {
+    log('INFO', "--- Starting New Batch Process ---");
     const usedArticleUrls = new Set<string>();
-    const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
     for (const category of NEWS_CATEGORIES) {
-        log(env, 'INFO', `Processing category: ${category.name}`, { category: category.name });
+        log('INFO', `Processing category: ${category.name}`, { category: category.name });
         try {
             // Step 3: Fetch News
-            let articles = await fetchNewsForCategory(category, env, usedArticleUrls);
+            let articles = await fetchNewsForCategory(category, usedArticleUrls);
             if (articles.length === 0) {
-                log(env, 'WARNING', `No new, valid articles found for ${category.name}. Skipping.`, { category: category.name });
+                log('WARNING', `No new, valid articles found for ${category.name}. Skipping.`, { category: category.name });
                 continue;
             }
 
             // Step 4: Analyze & Select Best Article
-            const analysisResult = await analyzeArticlesWithGemini(articles, ai, env);
+            const analysisResult = await analyzeArticlesWithGemini(articles, ai);
             if (!analysisResult) {
-                log(env, 'WARNING', `Gemini found no relevant articles in ${category.name}. Skipping.`, { category: category.name });
+                log('WARNING', `Gemini found no relevant articles in ${category.name}. Skipping.`, { category: category.name });
                 continue;
             }
             const chosenArticle = articles[analysisResult.chosenId - 1];
             usedArticleUrls.add(chosenArticle.link);
-            log(env, 'INFO', `Chosen article: "${chosenArticle.title}"`, { link: chosenArticle.link });
+            log('INFO', `Chosen article: "${chosenArticle.title}"`, { link: chosenArticle.link });
 
             // Step 5: Prepare Main Image Source
-            const mainImageSrc = await prepareMainImage(chosenArticle, analysisResult.imagePrompt, ai, env);
+            const mainImageSrc = await prepareMainImage(chosenArticle, analysisResult.imagePrompt, ai);
             if (!mainImageSrc) {
-                 log(env, 'ERROR', `Failed to fetch or generate main image for article: ${chosenArticle.link}`, { article: chosenArticle });
+                 log('ERROR', `Failed to fetch or generate main image for article: ${chosenArticle.link}`, { article: chosenArticle });
                  continue;
             }
 
             // Step 6: Compose Final Image
-            log(env, 'INFO', "Composing final image...", { category: category.name });
-            const finalImageBase64 = await composeFinalImage(analysisResult, mainImageSrc, env);
+            log('INFO', "Composing final image...", { category: category.name });
+            const finalImageBase64 = await composeFinalImage(analysisResult, mainImageSrc);
 
             // Step 7: Upload to Cloudinary
-            log(env, 'INFO', "Uploading image to Cloudinary...", { category: category.name });
-            const cloudinaryUrl = await uploadToCloudinary(finalImageBase64, env);
+            log('INFO', "Uploading image to Cloudinary...", { category: category.name });
+            const cloudinaryUrl = await uploadToCloudinary(finalImageBase64);
 
             // Step 8: Send to Webhook
-            log(env, 'INFO', "Sending data to Make.com webhook...", { category: category.name });
-            await sendToWebhook(analysisResult, cloudinaryUrl, chosenArticle, env);
+            log('INFO', "Sending data to Make.com webhook...", { category: category.name });
+            await sendToWebhook(analysisResult, cloudinaryUrl, chosenArticle);
 
-            log(env, 'SUCCESS', `Successfully processed and posted for category: ${category.name}`, { category: category.name, imageUrl: cloudinaryUrl });
+            log('SUCCESS', `Successfully processed and posted for category: ${category.name}`, { category: category.name, imageUrl: cloudinaryUrl });
 
         } catch (error) {
             const errorDetails = error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) };
-            log(env, 'ERROR', `!!! FAILED to process category ${category.name} !!!`, { category: category.name, ...errorDetails });
+            log('ERROR', `!!! FAILED to process category ${category.name} !!!`, { category: category.name, ...errorDetails });
             // Continue to the next category
         }
     }
-    log(env, 'INFO', "--- Batch Process Finished ---");
+    log('INFO', "--- Batch Process Finished ---");
 }
 
-async function fetchNewsForCategory(category: NewsCategory, env: Env, usedUrls: Set<string>): Promise<NewsArticle[]> {
+async function fetchNewsForCategory(category: NewsCategory, usedUrls: Set<string>): Promise<NewsArticle[]> {
     let rawArticles: NewsArticle[] = [];
     
     if (category.apiValue === "top") {
-        log(env, 'INFO', "Fetching for special 'Trending' category...");
+        log('INFO', "Fetching for special 'Trending' category...");
         const otherCategories = NEWS_CATEGORIES.filter(c => c.apiValue !== "top").map(c => c.apiValue);
         const promises = otherCategories.map(cat => {
-            const url = `https://newsdata.io/api/1/news?apikey=${env.NEWSDATA_API_KEY}&country=bd&language=en&image=1&size=10&category=${cat}`;
+            const url = `https://newsdata.io/api/1/news?apikey=${NEWSDATA_API_KEY}&country=bd&language=en&image=1&size=10&category=${cat}`;
             return fetch(url).then(res => res.json() as Promise<NewsDataResponse>);
         });
         const responses = await Promise.all(promises);
@@ -137,8 +155,8 @@ async function fetchNewsForCategory(category: NewsCategory, env: Env, usedUrls: 
         rawArticles = uniqueArticles.slice(0, 10);
 
     } else {
-        log(env, 'INFO', `Fetching news for '${category.apiValue}'...`);
-        const url = `https://newsdata.io/api/1/news?apikey=${env.NEWSDATA_API_KEY}&country=bd&language=en&image=1&size=10&category=${category.apiValue}`;
+        log('INFO', `Fetching news for '${category.apiValue}'...`);
+        const url = `https://newsdata.io/api/1/news?apikey=${NEWSDATA_API_KEY}&country=bd&language=en&image=1&size=10&category=${category.apiValue}`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`NewsData API request failed: ${response.statusText}`);
         const data: NewsDataResponse = await response.json();
@@ -148,7 +166,7 @@ async function fetchNewsForCategory(category: NewsCategory, env: Env, usedUrls: 
     const validArticles = rawArticles.filter(a => a.image_url && (a.content || a.description));
     const unusedArticles = validArticles.filter(a => !usedUrls.has(a.link));
 
-    log(env, 'INFO', `Found ${unusedArticles.length} new, valid articles for ${category.name}.`);
+    log('INFO', `Found ${unusedArticles.length} new, valid articles for ${category.name}.`);
     return unusedArticles;
 }
 
@@ -192,8 +210,8 @@ SOURCE_NAME: [The source name (e.g., 'thedailystar') from the chosen article. Th
     `;
 }
 
-async function analyzeArticlesWithGemini(articles: NewsArticle[], ai: GoogleGenAI, env: Env): Promise<GeminiAnalysisResult | null> {
-    log(env, 'INFO', "Analyzing articles with Gemini...");
+async function analyzeArticlesWithGemini(articles: NewsArticle[], ai: GoogleGenAI): Promise<GeminiAnalysisResult | null> {
+    log('INFO', "Analyzing articles with Gemini...");
     const prompt = buildGeminiPrompt(articles);
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -228,13 +246,13 @@ async function analyzeArticlesWithGemini(articles: NewsArticle[], ai: GoogleGenA
     }
 }
 
-async function prepareMainImage(article: NewsArticle, geminiPrompt: string, ai: GoogleGenAI, env: Env): Promise<string | null> {
-    log(env, 'INFO', "Preparing main image. Trying to fetch original article image first...");
+async function prepareMainImage(article: NewsArticle, geminiPrompt: string, ai: GoogleGenAI): Promise<string | null> {
+    log('INFO', "Preparing main image. Trying to fetch original article image first...");
     if (article.image_url) {
         try {
             const response = await fetch(article.image_url);
             if (response.ok) {
-                log(env, 'INFO', "Original image fetched successfully. Converting to base64...");
+                log('INFO', "Original image fetched successfully. Converting to base64...");
                 const blob = await response.blob();
                 const buffer = await blob.arrayBuffer();
                 let binary = '';
@@ -246,14 +264,14 @@ async function prepareMainImage(article: NewsArticle, geminiPrompt: string, ai: 
                 const mimeType = response.headers.get("Content-Type") || "image/png";
                 return `data:${mimeType};base64,${base64Image}`;
             }
-            log(env, 'WARNING', `Failed to fetch original image: ${response.status}. Generating new one.`);
+            log('WARNING', `Failed to fetch original image: ${response.status}. Generating new one.`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            log(env, 'WARNING', `Error fetching original image: ${errorMessage}. Generating new one.`);
+            log('WARNING', `Error fetching original image: ${errorMessage}. Generating new one.`);
         }
     }
 
-    log(env, 'INFO', "Generating image with Gemini Imagen...");
+    log('INFO', "Generating image with Gemini Imagen...");
     const imageResponse = await ai.models.generateImages({
         model: 'imagen-3.0-generate-002',
         prompt: geminiPrompt,
@@ -301,7 +319,7 @@ const getDynamicFontSize = (headline: string): number => {
     return 40; // Smallest size for very long headlines
 };
 
-async function composeFinalImage(analysis: GeminiAnalysisResult, mainImageSrc: string, env: Env): Promise<string> {
+async function composeFinalImage(analysis: GeminiAnalysisResult, mainImageSrc: string): Promise<string> {
     const poppinsRegular = await getFontData('https://fonts.gstatic.com/s/poppins/v21/pxiEyp8kv8JHgFVrJJbecnFHGPezSQ.woff2');
     const poppinsBold = await getFontData('https://fonts.gstatic.com/s/poppins/v21/pxiByp8kv8JHgFVrLBT5Z1xlFQ.woff2');
     const interSemiBold = await getFontData('https://fonts.gstatic.com/s/inter/v13/UcC73FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7.woff2');
@@ -374,11 +392,11 @@ async function composeFinalImage(analysis: GeminiAnalysisResult, mainImageSrc: s
         }),
         // Overlays
         React.createElement('img', {
-            src: env.OVERLAY_IMAGE_URL,
+            src: OVERLAY_IMAGE_URL,
             style: { position: 'absolute', top: 0, left: 0, width: 1080, height: 1080 }
         }),
         React.createElement('img', {
-            src: env.LOGO_URL,
+            src: LOGO_URL,
             style: { position: 'absolute', bottom: 20, left: 20, width: 200, height: 60, objectFit: 'contain' }
         }),
         React.createElement('div', {
@@ -393,7 +411,7 @@ async function composeFinalImage(analysis: GeminiAnalysisResult, mainImageSrc: s
                     textShadow: '1px 1px 3px black'
                 }
             },
-            env.BRAND_TEXT
+            BRAND_TEXT
         )
     );
 
@@ -426,14 +444,14 @@ async function composeFinalImage(analysis: GeminiAnalysisResult, mainImageSrc: s
 }
 
 
-async function uploadToCloudinary(imageBase64: string, env: Env): Promise<string> {
+async function uploadToCloudinary(imageBase64: string): Promise<string> {
     const formData = new FormData();
     formData.append('file', imageBase64);
-    formData.append('api_key', env.CLOUDINARY_API_KEY);
-    formData.append('upload_preset', env.CLOUDINARY_UPLOAD_PRESET);
+    formData.append('api_key', CLOUDINARY_API_KEY);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
     const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${env.CLOUDINARY_CLOUD_NAME}/image/upload`,
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
         {
             method: 'POST',
             body: formData,
@@ -449,7 +467,7 @@ async function uploadToCloudinary(imageBase64: string, env: Env): Promise<string
     return data.secure_url;
 }
 
-async function sendToWebhook(analysis: GeminiAnalysisResult, imageUrl: string, article: NewsArticle, env: Env): Promise<void> {
+async function sendToWebhook(analysis: GeminiAnalysisResult, imageUrl: string, article: NewsArticle): Promise<void> {
     const payload = {
         headline: analysis.headline,
         imageUrl: imageUrl,
@@ -458,11 +476,11 @@ async function sendToWebhook(analysis: GeminiAnalysisResult, imageUrl: string, a
         status: "Queue"
     };
 
-    const response = await fetch(env.MAKE_WEBHOOK_URL, {
+    const response = await fetch(MAKE_WEBHOOK_URL, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'x-make-apikey': env.MAKE_WEBHOOK_AUTH_TOKEN
+            'x-make-apikey': MAKE_WEBHOOK_AUTH_TOKEN
         },
         body: JSON.stringify(payload)
     });
@@ -471,5 +489,5 @@ async function sendToWebhook(analysis: GeminiAnalysisResult, imageUrl: string, a
         const errorText = await response.text();
         throw new Error(`Webhook failed: ${response.status} ${errorText}`);
     }
-    log(env, 'SUCCESS', "Webhook call successful.");
+    log('SUCCESS', "Webhook call successful.");
 }

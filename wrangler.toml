@@ -1,0 +1,9 @@
+name  = "dhaka-dispatch-worker"
+main = "src/index.ts"
+compatibility_date = "20 24-07-29" # A recent date
+
+[triggers]
+# Run the worker at the top of every  hour.
+# You can customize this cron expression as needed.
+# See: https://developers.cloudflare.com /workers/wrangler/configuration/#triggers
+crons = ["0 * * * *"]
