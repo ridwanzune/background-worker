@@ -1,7 +1,18 @@
+# This is the main configuration file for your Cloudflare Worker.
+# It's used by the 'wrangler' command-line tool for building and deploying.
 
 name = "dhaka-dispatch-worker"
 main = "src/index.ts"
+
+# Use a recent compatibility date to enable the latest features.
 compatibility_date = "2024-07-29"
 
+# This compatibility flag is ESSENTIAL.
+# It enables Node.js APIs like 'fs' and 'path' that are required by the @resvg/resvg-js library.
+# Without this, your build will fail.
+compatibility_flags = ["nodejs_compat"]
+
+# This section configures the cron trigger to run your worker on a schedule.
+# The current setting "0 * * * *" means the worker will run at the top of every hour.
 [triggers]
 crons = ["0 * * * *"]
