@@ -10,11 +10,11 @@
   "dependencies": {
     "@google/genai": "^0.15.0",
     "@resvg/resvg-js": "^2.6.2",
-    "satori": "^0.10.14"
+    "satori": "^0.10.13"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240725.0",
-    "@types/react": "^18.3.3",
+    "@types/react": "^18.3.1",
     "react": "^18.3.1",
     "typescript": "^5.5.4",
     "wrangler": "^3.67.1"
