@@ -1,12 +1,7 @@
-<files>
-  <file name="wrangler.toml">
-    [code]
+
 name = "dhaka-dispatch-worker"
 main = "src/index.ts"
 compatibility_date = "2024-07-29"
 
 [triggers]
 crons = ["0 * * * *"]
-    [/code]
-  </file>
-</files>
