@@ -1,0 +1,21 @@
+
+{
+  "name": "dhaka-dispatch-worker",
+  "version": "1.0.0",
+  "description": "A Cloudflare Worker to automate social media post creation from Bangladesh news.",
+  "main": "src/index.ts",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@google/genai": "^0.15.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "satori": "^0.10.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240725.0",
+    "typescript": "^5.5.4",
+    "wrangler": "^3.67.1"
+  }
+}
